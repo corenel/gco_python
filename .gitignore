@@ -1,4 +1,7 @@
 gco_src
+.DS_Store
+gco_python.cpp
+pygco.so
 *.py[co]
 
 # Packages
