@@ -80,7 +80,7 @@ def cut_simple(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
 def cut_simple_vh(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
         np.ndarray[np.int32_t, ndim=2, mode='c'] pairwise_cost,
         np.ndarray[np.int32_t, ndim=2, mode='c'] costV,
-        np.ndarray[np.int32_t, ndim=2, mode='c'] costH, 
+        np.ndarray[np.int32_t, ndim=2, mode='c'] costH,
         n_iter=5,
         algorithm='expansion'):
     """
@@ -182,6 +182,53 @@ def cut_from_graph(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
             gc.setNeighbors(e[0], e[1])
     gc.setDataCost(<int*>unary_cost.data)
     gc.setSmoothCost(<int*>pairwise_cost.data)
+    if algorithm == 'swap':
+        gc.swap(n_iter)
+    elif algorithm == 'expansion':
+        gc.expansion(n_iter)
+    else:
+        raise ValueError("algorithm should be either `swap` or `expansion`. Got: %s" % algorithm)
+
+    cdef np.npy_intp result_shape[1]
+    result_shape[0] = n_vertices
+    cdef np.ndarray[np.int32_t, ndim=1] result = np.PyArray_SimpleNew(1, result_shape, np.NPY_INT32)
+    cdef int * result_ptr = <int*>result.data
+    for i in xrange(n_vertices):
+        result_ptr[i] = gc.whatLabel(i)
+    del gc
+    return result
+
+
+def cut_from_graph_kai(np.ndarray[np.int32_t, ndim=2, mode='c'] edges,
+        np.ndarray[np.int32_t, ndim=2, mode='c'] unary_cost,
+        n_iter=5,
+        algorithm='expansion'):
+    """
+    Apply multi-label graphcuts to arbitrary graph given by `edges`.
+
+    Parameters
+    ----------
+    edges: ndarray, int32, shape(n_edges, 2 or 3)
+        Rows correspond to edges in graph, given as vertex indices.
+        if edges is n_edges x 3 then third parameter is used as edge weight
+    unary_cost: ndarray, int32, shape=(n_vertices, n_labels)
+        Unary potentials
+    n_iter: int, (default=5)
+        Number of iterations
+    algorithm: string, `expansion` or `swap`, default=expansion
+        Whether to perform alpha-expansion or alpha-beta-swaps.
+    """
+
+    cdef int n_vertices = unary_cost.shape[0]
+    cdef int n_labels = unary_cost.shape[1]
+
+    cdef GCoptimizationGeneralGraph* gc = new GCoptimizationGeneralGraph(n_vertices, n_labels)
+    for e in edges:
+        if e.shape[0] == 3:
+            gc.setNeighbors(e[0], e[1], e[2])
+        else:
+            gc.setNeighbors(e[0], e[1])
+    gc.setDataCost(<int*>unary_cost.data)
     if algorithm == 'swap':
         gc.swap(n_iter)
     elif algorithm == 'expansion':
